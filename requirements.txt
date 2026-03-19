@@ -1,0 +1,10 @@
+customtkinter
+psutil
+scapy
+cryptography
+pyotp
+flask
+pillow
+requests
+qrcode
+pynput
