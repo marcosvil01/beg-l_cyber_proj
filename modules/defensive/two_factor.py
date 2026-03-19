@@ -1,59 +1,54 @@
 import pyotp
-import qrcode
 import os
 import json
+import base64
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "secrets.json")
+DB_PATH = os.path.join(os.path.dirname(__file__), "secrets.enc")
+# In a real app, the master password would be provided by the user
+MASTER_SALT = b"\x14\x88\x8f\x8d\x8c\x8b\x8a\x89"
+
+def _get_fernet():
+    # Derive a key from a fixed "master" for demo purposes
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=MASTER_SALT, iterations=100000)
+    key = base64.urlsafe_b64encode(kdf.derive(b"CyberHub_Master_Key_v2"))
+    return Fernet(key)
 
 def save_secret(label, secret):
-    """
-    Saves a secret to the local JSON database.
-    """
     data = load_secrets()
     data[label] = secret
-    with open(DB_PATH, "w") as f:
-        json.dump(data, f, indent=4)
+    f = _get_fernet()
+    encrypted_data = f.encrypt(json.dumps(data).encode())
+    with open(DB_PATH, "wb") as file:
+        file.write(encrypted_data)
 
 def load_secrets():
-    """
-    Loads all saved secrets from the local JSON database.
-    """
     if not os.path.exists(DB_PATH):
         return {}
-    with open(DB_PATH, "r") as f:
-        try:
-            return json.load(f)
-        except:
-            return {}
+    try:
+        f = _get_fernet()
+        with open(DB_PATH, "rb") as file:
+            decrypted_data = f.decrypt(file.read())
+            return json.loads(decrypted_data.decode())
+    except Exception as e:
+        print(f"Error loading secrets: {e}")
+        return {}
 
 def delete_secret(label):
-    """
-    Deletes a secret from the database.
-    """
     data = load_secrets()
     if label in data:
         del data[label]
-        with open(DB_PATH, "w") as f:
-            json.dump(data, f, indent=4)
+        save_secret("__DUMMY__", "__DUMMY__") # Trigger re-encryption
+        data = load_secrets()
+        if "__DUMMY__" in data: del data["__DUMMY__"]
+        f = _get_fernet()
+        with open(DB_PATH, "wb") as file:
+            file.write(f.encrypt(json.dumps(data).encode()))
 
 def generate_totp_secret():
     return pyotp.random_base32()
 
-def get_totp_uri(secret, name="User", issuer="CyberHub"):
-    return pyotp.totp.TOTP(secret).provisioning_uri(name=name, issuer_name=issuer)
-
-def verify_totp(secret, code):
-    return pyotp.TOTP(secret).verify(code)
-
 def get_current_code(secret):
-    """
-    Returns the current 6-digit TOTP code for a secret.
-    """
     return pyotp.TOTP(secret).now()
-
-if __name__ == "__main__":
-    # Example usage (uncomment to test locally)
-    # secret = generate_totp_secret()
-    # uri = get_totp_uri(secret)
-    # generate_qr_code(uri)
-    pass

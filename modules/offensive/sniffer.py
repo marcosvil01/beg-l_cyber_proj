@@ -20,12 +20,24 @@ def start_sniffing(interface=None, count=10, filter_type=None, callback=None):
     print(f"[*] Sniffing on {interface if interface else 'default'} (Filter: {filter_str})...")
     
     def internal_callback(packet):
-        if callback:
-            callback(packet)
-        else:
-            packet_callback(packet)
+        if IP in packet:
+            ip_layer = packet[IP]
+            proto = "TCP" if TCP in packet else "UDP" if UDP in packet else "Other"
+            mac_info = f" | MAC: {packet.src} -> {packet.dst}" if hasattr(packet, 'src') else ""
+            
+            info = f"[{proto}] {ip_layer.src} -> {ip_layer.dst} | TTL: {ip_layer.ttl} | SZ: {len(packet)}b{mac_info}"
+            if callback:
+                callback(info)
+            else:
+                print(f"[+] {info}")
 
-    sniff(iface=interface, prn=internal_callback, count=count, filter=filter_str)
+    try:
+        sniff(iface=interface, prn=internal_callback, count=count, filter=filter_str, store=0)
+    except Exception as e:
+        if callback:
+            callback(f"ERROR: {str(e)}")
+        else:
+            print(f"[-] Error sniffing: {e}")
 
 if __name__ == "__main__":
     # Example usage for standalone testing

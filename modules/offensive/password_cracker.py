@@ -36,13 +36,25 @@ def crack_password(target_hash, hash_type, dictionary_path, progress_callback=No
     except Exception as e:
         return f"Error: {str(e)}"
 
-def brute_force(target_hash, hash_type, max_length=4, progress_callback=None):
+def brute_force(target_hash, hash_type, max_length=4, char_sets=None, progress_callback=None):
     """
-    Attempts to crack a password hash using brute-force up to max_length.
+    Enhanced Brute-force with multiple character sets.
+    char_sets: list containing 'lower', 'upper', 'digits', 'special'
     """
-    chars = string.ascii_lowercase + string.digits
+    import time
+    chars = ""
+    if not char_sets: char_sets = ["lower", "digits"]
+    
+    if "lower" in char_sets: chars += string.ascii_lowercase
+    if "upper" in char_sets: chars += string.ascii_uppercase
+    if "digits" in char_sets: chars += string.digits
+    if "special" in char_sets: chars += string.punctuation
+    
+    if not chars: chars = string.ascii_lowercase
+
     total_combinations = sum(len(chars)**i for i in range(1, max_length + 1))
     current_attempt = 0
+    start_time = time.time()
 
     for length in range(1, max_length + 1):
         for guess in itertools.product(chars, repeat=length):
@@ -53,10 +65,11 @@ def brute_force(target_hash, hash_type, max_length=4, progress_callback=None):
                 current_hash = hashlib.sha256(word.encode()).hexdigest()
             
             if current_hash == target_hash:
-                return f"SUCCESS! Brute-forced: {word}"
+                elapsed = time.time() - start_time
+                return f"SUCCESS! Found: {word} (Time: {elapsed:.2f}s)"
             
             current_attempt += 1
-            if progress_callback and current_attempt % 500 == 0:
+            if progress_callback and current_attempt % 1000 == 0:
                 progress_callback(current_attempt / total_combinations)
                 
     return "FAILED: Brute-force range exceeded."
